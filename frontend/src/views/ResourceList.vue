@@ -175,7 +175,7 @@
           </div>
         </template>
         <el-table 
-          :data="systemBalances" 
+          :data="balanceInfo" 
           stripe
           v-loading="loading"
           :header-cell-style="{ background: '#f5f7fa' }"
@@ -223,7 +223,7 @@
           </div>
         </template>
         <el-table 
-          :data="filteredBillings" 
+          :data="billingDetails" 
           stripe
           v-loading="loading"
           :header-cell-style="{ background: '#f5f7fa' }"
@@ -525,6 +525,16 @@
   onUnmounted(() => {
     stopPolling()
     document.removeEventListener('visibilitychange', handleVisibilityChange)
+  })
+  
+  // 账户余额信息
+  const balanceInfo = computed(() => {
+    return billings.value.filter(billing => billing.service_name === '账户余额')
+  })
+  
+  // 账单详情信息（排除账户余额）
+  const billingDetails = computed(() => {
+    return billings.value.filter(billing => billing.service_name !== '账户余额')
   })
   </script>
   
