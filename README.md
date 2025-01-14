@@ -44,44 +44,34 @@
 - MySQL >= 5.7
 - npm >= 8
 
-### 后端服务
+### 项目启动
+
+在项目根目录下运行以下命令来同时启动前端和后端：
 
 ```bash
-# 进入后端目录
-cd backend
-
-# 安装依赖
 npm install
-
-# 配置环境变量
-cp .env.example .env
-# 修改 .env 文件中的配置
-
-# 开发环境运行
-npm run dev
-
-# 生产环境运行
 npm run start
 ```
 
-### 前端服务
+### 配置环境变量
 
-```bash
-# 进入前端目录
-cd frontend
+在项目根目录创建 `.env` 文件：
 
-# 安装依赖
-npm install
+```env
+# API 配置
+VITE_API_URL=http://localhost:3000/api
 
-# 配置环境变量
-cp .env.example .env
-# 修改 .env 文件中的配置
+# 应用基础配置
+VITE_APP_TITLE=云资源管理系统
+VITE_APP_DEFAULT_WARNING_DAYS=30
+VITE_APP_PAGE_SIZE=10
 
-# 开发环境运行
-npm run dev
+# 显示格式配置
+VITE_APP_DATE_FORMAT=YYYY-MM-DD HH:mm:ss
+VITE_APP_CURRENCY_SYMBOL=¥
 
-# 生产环境构建
-npm run build
+# 功能配置
+VITE_APP_POLLING_INTERVAL=30000  # 数据刷新间隔(毫秒)
 ```
 
 ## 技术栈

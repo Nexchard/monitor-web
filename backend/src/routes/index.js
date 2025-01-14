@@ -133,8 +133,6 @@ router.get('/resources', async (req, res) => {
 // 获取账单信息
 router.get('/billing', async (req, res) => {
   try {
-    console.log('开始获取账单信息...')
-    
     // 查询腾讯云账户余额
     const tencentBalanceQuery = `
       SELECT 
