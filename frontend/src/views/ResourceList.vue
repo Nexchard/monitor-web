@@ -258,8 +258,11 @@
   import PlatformIcon from '../components/PlatformIcon.vue'
   import { ElMessage } from 'element-plus'
   
+  // 修改这行
+  // const defaultWarningDays = 30
+  const defaultWarningDays = Number(import.meta.env.VITE_APP_DEFAULT_WARNING_DAYS) || 30
+  
   // 从 localStorage 获取预警天数，如果没有则使用默认值
-  const defaultWarningDays = 30
   const warningDays = ref(Number(localStorage.getItem('warningDays')) || defaultWarningDays)
   
   // 数据加载状态
