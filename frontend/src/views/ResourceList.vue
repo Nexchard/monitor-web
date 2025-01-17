@@ -108,6 +108,20 @@
                   clearable
                   :prefix-icon="Search"
                 />
+
+                <!-- 添加排序选择器 -->
+                <el-select 
+                  v-model="sortOrder" 
+                  class="filter-item" 
+                  placeholder="排序方式"
+                >
+                  <el-option
+                    v-for="option in sortOptions"
+                    :key="option.value"
+                    :label="option.label"
+                    :value="option.value"
+                  />
+                </el-select>
               </div>
 
               <el-button type="primary" size="small" @click="fetchData">
@@ -323,6 +337,9 @@
   const filteredResources = computed(() => {
     let result = resources.value
 
+    // 首先筛选出符合预警天数要求的资源
+    result = result.filter(item => item.differ_days <= warningDays.value)
+
     // 平台筛选
     if (selectedPlatform.value) {
       result = result.filter(item => item.platform === selectedPlatform.value)
@@ -345,6 +362,13 @@
         item.resource_name.toLowerCase().includes(keyword)
       )
     }
+
+    // 根据选择的排序方式进行排序
+    result.sort((a, b) => {
+      return sortOrder.value === 'asc' 
+        ? a.differ_days - b.differ_days 
+        : b.differ_days - a.differ_days
+    })
 
     return result
   })
@@ -539,6 +563,15 @@
   const billingDetails = computed(() => {
     return billings.value.filter(billing => billing.service_name !== '账户余额')
   })
+  
+  // 排序方式
+  const sortOrder = ref('asc') // 'asc' 为升序，'desc' 为降序
+  
+  // 排序选项
+  const sortOptions = [
+    { label: '剩余天数从少到多', value: 'asc' },
+    { label: '剩余天数从多到少', value: 'desc' }
+  ]
   </script>
   
   <style scoped>
