@@ -1,0 +1,18 @@
+{
+  "devDependencies": {
+    "@types/node": "^22.13.1"
+  },
+  "name": "monitor-web2",
+  "version": "1.0.0",
+  "description": "本项目是一个统一的云资源监控管理平台，用于整合华为云和腾讯云的资源监控数据，提供统一的数据展示和查询界面。",
+  "main": "index.js",
+  "dependencies": {
+    "undici-types": "^6.20.0"
+  },
+  "scripts": {
+    "test": "echo \"Error: no test specified\" && exit 1"
+  },
+  "keywords": [],
+  "author": "",
+  "license": "ISC"
+}

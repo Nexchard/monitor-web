@@ -1,0 +1,47 @@
+import express from 'express';
+import cors from 'cors';
+import cloudRoutes from './routes/cloud.routes';
+import { setupSyncTasks } from './tasks/sync.task';
+
+const app = express();
+const port = Number(process.env.PORT) || 3000;  // 转换为数字
+const host = process.env.HOST || '0.0.0.0';
+
+// CORS配置
+app.use(cors({
+  origin: '*',  // 开发环境下允许所有来源
+  methods: ['GET', 'POST', 'OPTIONS'],
+  allowedHeaders: ['Content-Type', 'Authorization']
+}));
+
+app.use(express.json());
+
+// API路由
+app.use('/api', cloudRoutes);
+
+// 添加健康检查接口
+app.get('/health', (req, res) => {
+  res.json({ status: 'ok' });
+});
+
+// 启动同步任务
+setupSyncTasks();
+
+// 添加错误处理中间件
+app.use((err: any, req: express.Request, res: express.Response, next: express.NextFunction) => {
+  console.error('Global error handler:', err);
+  res.status(500).json({
+    error: 'Internal Server Error',
+    message: err.message,
+    stack: process.env.NODE_ENV === 'development' ? err.stack : undefined
+  });
+});
+
+// 添加404处理
+app.use((req: express.Request, res: express.Response) => {
+  res.status(404).json({ error: 'Not Found' });
+});
+
+app.listen(port, host, () => {
+  console.log(`Server is running on http://${host}:${port}`);
+}); 
