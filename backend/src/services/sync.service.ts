@@ -115,7 +115,7 @@ export class SyncService {
   private async syncResources(batchNumber: string) {
     try {
       // 获取华为云资源
-      const [hwResources] = await huaweiPool.query<(Resource & RowDataPacket)[]>(`
+      const [hwBaseResources] = await huaweiPool.query<(Resource & RowDataPacket)[]>(`
         SELECT 
           account_name,
           service_type as resource_type,
@@ -129,6 +129,24 @@ export class SyncService {
         FROM resources 
         WHERE batch_number = (SELECT MAX(batch_number) FROM resources)
       `);
+
+      // 获取华为云域名资源
+      const [hwDomainResources] = await huaweiPool.query<(Resource & RowDataPacket)[]>(`
+        SELECT 
+          account_name,
+          'DOMAIN' as resource_type,
+          resource_id,
+          resource_name,
+          'default' as project_name,
+          'global' as region,
+          expire_time,
+          remaining_days,
+          ? as batch_number
+        FROM domains
+      `, [batchNumber]);
+
+      // 合并华为云资源
+      const hwResources = [...hwBaseResources, ...hwDomainResources];
 
       // 获取腾讯云资源
       const [tcResources] = await tencentPool.query<(Resource & RowDataPacket)[]>(`
@@ -157,19 +175,6 @@ export class SyncService {
           batch_number
         FROM cbs_disks 
         WHERE batch_number = (SELECT MAX(batch_number) FROM cbs_disks)
-        UNION ALL
-        SELECT 
-          account_name,
-          'DOMAIN' as resource_type,
-          domain_id as resource_id,
-          domain_name as resource_name,
-          'default' as project_name,  -- 域名没有项目名称，使用默认值
-          'global' as zone,           -- 域名是全局资源
-          expired_time as expire_time,
-          differ_days as remaining_days,
-          batch_number
-        FROM domains
-        WHERE batch_number = (SELECT MAX(batch_number) FROM domains)
         UNION ALL
         SELECT 
           account_name,
