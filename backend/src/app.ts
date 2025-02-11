@@ -10,7 +10,7 @@ const host = process.env.HOST || '0.0.0.0';
 // CORS配置
 app.use(cors({
   origin: '*',  // 开发环境下允许所有来源
-  methods: ['GET', 'POST', 'OPTIONS'],
+  methods: ['GET', 'POST', 'PUT', 'DELETE', 'OPTIONS'],
   allowedHeaders: ['Content-Type', 'Authorization']
 }));
 

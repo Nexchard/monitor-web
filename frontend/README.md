@@ -1,126 +1,167 @@
-# 云资源监控看板前端
+# 云资源监控平台前端
 
-基于 Vue 3 + TypeScript + Element Plus 的云资源监控系统前端项目。
+## 项目简介
+本项目是云资源监控平台的前端部分，基于 Vue 3 + TypeScript + Element Plus 开发。提供了直观的界面来展示和管理云资源的监控数据，包括资源到期情况、账户余额和账单详情等功能。
 
-## 功能特性
+## 主要功能
+1. 资源到期监控
+   - 展示各云平台资源的到期时间
+   - 支持按剩余天数筛选和排序
+   - 提供多维度筛选（平台、账号、资源类型）
+   - 支持资源备注管理
 
-- 多云平台资源监控
-  * 腾讯云资源到期提醒
-  * 华为云资源到期提醒
-  * 账户余额监控
-  * 费用账单统计
+2. 账户余额监控
+   - 显示各账户的现金余额
+   - 展示储值卡余额及到期时间
+   - 支持按平台筛选
 
-- 灵活的筛选功能
-  * 按平台筛选
-  * 按账号筛选
-  * 按资源类型筛选
-  * 资源名称搜索
+3. 账单明细查看
+   - 展示各账户的消费明细
+   - 按项目和服务类型分类
+   - 支持按平台筛选
 
-- 自动化功能
-  * 自动刷新数据
-  * 页面切换自动暂停/恢复
-  * 本地存储预警设置
+4. 数据同步功能
+   - 支持手动触发数据同步
+   - 自动定时同步（可配置间隔时间）
 
 ## 技术栈
-
 - Vue 3
 - TypeScript
-- Vite
 - Element Plus
+- Vite
 - Vue Router
-- Vue Icons Plus
 - Axios
-- Day.js
+- dayjs
 
-## 快速开始
+## 开发环境要求
+- Node.js >= 16.0.0
+- npm >= 7.0.0
 
-### 环境要求
-
-- Node.js >= 16
-- npm >= 8
-
-### 安装依赖
-
+## 安装和运行
+1. 安装依赖
 ```bash
 npm install
 ```
 
-### 开发环境运行
+2. 配置环境变量
+```bash
+# 复制环境变量示例文件
+cp .env.example .env
 
+# 修改环境变量
+# 编辑 .env 文件，配置必要的环境变量
+```
+
+3. 开发环境运行
 ```bash
 npm run dev
 ```
 
-### 生产环境构建
-
+4. 生产环境构建
 ```bash
 npm run build
 ```
 
-## 项目配置
-
-### 环境变量
-
-在项目根目录创建 `.env` 文件：
-
+## 环境变量说明
 ```env
-# API 配置
+# API 基础路径
 VITE_API_URL=http://localhost:3000/api
 
-# 应用基础配置
-VITE_APP_TITLE=云资源管理系统
+# 默认预警天数
 VITE_APP_DEFAULT_WARNING_DAYS=30
-VITE_APP_PAGE_SIZE=10
 
-# 显示格式配置
-VITE_APP_DATE_FORMAT=YYYY-MM-DD HH:mm:ss
-VITE_APP_CURRENCY_SYMBOL=¥
-
-# 功能配置
-VITE_APP_POLLING_INTERVAL=30000  # 数据刷新间隔(毫秒)
+# 数据轮询间隔（毫秒）
+VITE_APP_POLLING_INTERVAL=30000
 ```
 
 ## 项目结构
-
 ```
 frontend/
 ├── src/
-│   ├── api/          # API 请求
+│   ├── api/          # API 接口定义
 │   ├── components/   # 公共组件
+│   ├── types/        # TypeScript 类型定义
+│   ├── views/        # 页面组件
 │   ├── router/       # 路由配置
-│   ├── types/        # TypeScript 类型
-│   ├── utils/        # 工具函数
-│   └── views/        # 页面组件
+│   ├── App.vue       # 根组件
+│   └── main.ts       # 入口文件
 ├── public/           # 静态资源
-└── index.html        # 入口文件
+├── .env.example      # 环境变量示例
+├── index.html        # HTML 模板
+├── tsconfig.json     # TypeScript 配置
+├── vite.config.ts    # Vite 配置
+└── package.json      # 项目配置和依赖
 ```
 
 ## 开发指南
 
 ### 代码规范
 - 使用 TypeScript 编写代码
-- 使用 Composition API
-- 组件名使用 PascalCase
-- 变量名使用 camelCase
+- 遵循 Vue 3 组合式 API 风格
+- 使用 Element Plus 组件库的设计规范
+
+### 组件开发规范
+1. 组件文件命名采用 PascalCase
+2. 组件属性和方法采用 camelCase
+3. 类型定义放在 types 目录下
+4. API 接口统一管理在 api 目录下
+
+### 样式开发规范
+1. 使用 scoped CSS
+2. 遵循 BEM 命名规范
+3. 优先使用 Element Plus 的变量系统
+4. 响应式设计断点统一管理
 
 ### Git 提交规范
-- feat: 新功能
-- fix: 修复问题
-- docs: 文档修改
-- style: 代码格式
-- refactor: 代码重构
-- test: 测试相关
-- chore: 构建过程或辅助工具的变动
+```
+feat: 新功能
+fix: 修复问题
+docs: 文档修改
+style: 代码格式修改
+refactor: 代码重构
+test: 测试用例修改
+chore: 其他修改
+```
 
-### 账户余额监控
-- 实时余额展示
-- 多账号余额汇总
-- 现金余额展示
-- 储值卡余额展示
-- 储值卡到期提醒
+## 部署说明
+1. 构建生产环境代码
+```bash
+npm run build
+```
 
-## 显示规则
+2. 部署 dist 目录内容到 Web 服务器
 
-### 余额类型显示
-- 现金余额：显示"现金余额"
-- 储值卡：显示"储值卡 (到期时间)"
+3. 配置 Web 服务器
+```nginx
+# Nginx 配置示例
+location / {
+    root /path/to/dist;
+    try_files $uri $uri/ /index.html;
+}
+```
+
+## 常见问题
+1. 开发环境跨域问题
+   - 检查 VITE_API_URL 配置
+   - 确认后端 CORS 配置正确
+
+2. 构建失败
+   - 检查 Node.js 版本
+   - 清除 node_modules 重新安装
+
+3. 页面加载慢
+   - 检查网络请求
+   - 确认数据轮询间隔是否合理
+
+## 更新日志
+### v1.0.0 (2024-02-11)
+- 初始版本发布
+- 实现基础监控功能
+- 支持资源备注
+- 添加数据同步功能
+
+## 维护者
+- 开发团队
+
+## 许可证
+MIT License

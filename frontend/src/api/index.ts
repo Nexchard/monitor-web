@@ -55,6 +55,38 @@ export const getBillingDetails = async (): Promise<BillingDetail[]> => {
   }
 }
 
+// 更新资源备注
+export const updateResourceRemark = async (resourceId: number, remark: string): Promise<void> => {
+  try {
+    const response = await api.put(`/resources/${resourceId}/remark`, { remark });
+    if (!response.data) {
+      throw new Error('更新备注失败：服务器没有返回数据');
+    }
+  } catch (error) {
+    console.error('Update resource remark error:', error);
+    if (error instanceof AxiosError && error.response?.data) {
+      throw new Error(`更新备注失败：${error.response.data.details || error.response.data.error || '未知错误'}`);
+    }
+    throw new Error('更新备注失败：' + (error instanceof Error ? error.message : '未知错误'));
+  }
+};
+
+// 添加手动同步方法
+export const syncData = async (): Promise<void> => {
+  try {
+    const response = await api.post('/sync');
+    if (!response.data) {
+      throw new Error('同步失败：服务器没有返回数据');
+    }
+  } catch (error) {
+    console.error('Sync data error:', error);
+    if (error instanceof AxiosError && error.response?.data) {
+      throw new Error(`同步失败：${error.response.data.details || error.response.data.error || '未知错误'}`);
+    }
+    throw new Error('同步失败：' + (error instanceof Error ? error.message : '未知错误'));
+  }
+};
+
 // 统一处理 API 错误
 const handleApiError = (error: AxiosError<ApiErrorResponse>) => {
   if (error.response) {

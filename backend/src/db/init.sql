@@ -33,6 +33,7 @@ CREATE TABLE IF NOT EXISTS cloud_resources (
     expire_time DATETIME,
     remaining_days INT,
     status VARCHAR(20),       -- 新增字段：资源状态
+    remark TEXT,             -- 新增字段：资源备注
     batch_number VARCHAR(50),
     created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
     updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
@@ -65,4 +66,15 @@ CREATE TABLE IF NOT EXISTS sync_logs (
     error_message TEXT,       -- 错误信息
     batch_number VARCHAR(50), -- 同步批次号
     created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+
+-- 资源备注表
+CREATE TABLE IF NOT EXISTS resource_remarks (
+    id INT AUTO_INCREMENT PRIMARY KEY,
+    cloud_provider ENUM('huawei', 'tencent'),
+    resource_id VARCHAR(100),
+    remark TEXT,
+    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+    UNIQUE KEY `uk_resource_remark` (cloud_provider, resource_id)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci; 

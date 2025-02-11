@@ -157,6 +157,45 @@ export class SyncService {
           batch_number
         FROM cbs_disks 
         WHERE batch_number = (SELECT MAX(batch_number) FROM cbs_disks)
+        UNION ALL
+        SELECT 
+          account_name,
+          'DOMAIN' as resource_type,
+          domain_id as resource_id,
+          domain_name as resource_name,
+          'default' as project_name,  -- 域名没有项目名称，使用默认值
+          'global' as zone,           -- 域名是全局资源
+          expired_time as expire_time,
+          differ_days as remaining_days,
+          batch_number
+        FROM domains
+        WHERE batch_number = (SELECT MAX(batch_number) FROM domains)
+        UNION ALL
+        SELECT 
+          account_name,
+          'LIGHTHOUSE' as resource_type,
+          instance_id as resource_id,
+          instance_name as resource_name,
+          'default' as project_name,  -- 轻量应用服务器没有项目名称，使用默认值
+          zone,
+          expired_time as expire_time,
+          differ_days as remaining_days,
+          batch_number
+        FROM lighthouse_instances
+        WHERE batch_number = (SELECT MAX(batch_number) FROM lighthouse_instances)
+        UNION ALL
+        SELECT 
+          account_name,
+          'SSL' as resource_type,
+          certificate_id as resource_id,
+          domain as resource_name,    -- 使用域名作为资源名称
+          COALESCE(project_name, 'default') as project_name,
+          'global' as zone,           -- SSL证书是全局资源
+          expired_time as expire_time,
+          differ_days as remaining_days,
+          batch_number
+        FROM ssl_certificates
+        WHERE batch_number = (SELECT MAX(batch_number) FROM ssl_certificates)
       `);
 
       // 开启事务

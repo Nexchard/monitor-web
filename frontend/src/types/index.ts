@@ -23,6 +23,9 @@ export interface ResourceInfo {
   remaining_days: number
   status: string
   batch_number?: string
+  remark?: string  // 添加备注字段
+  isEditingRemark?: boolean
+  editingRemark?: string
 }
 
 /**

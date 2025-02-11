@@ -3,45 +3,40 @@ import dotenv from 'dotenv';
 
 dotenv.config();
 
-const createPool = (config: any) => {
-  try {
-    return mysql.createPool({
-      ...config,
-      waitForConnections: true,
-      connectionLimit: 10,
-      queueLimit: 0
-    });
-  } catch (error) {
-    console.error('Error creating database pool:', error);
-    throw error;
-  }
-};
-
-// 统一数据库连接池
-export const unifiedPool = createPool({
-  host: process.env.UNIFIED_DB_HOST,
-  user: process.env.UNIFIED_DB_USER,
-  password: process.env.UNIFIED_DB_PASSWORD,
-  port: Number(process.env.UNIFIED_DB_PORT),
-  database: process.env.UNIFIED_DB_DATABASE
+// 统一的数据库连接池配置
+export const unifiedPool = mysql.createPool({
+  host: process.env.DB_HOST,
+  port: Number(process.env.DB_PORT),
+  user: process.env.DB_USER,
+  password: process.env.DB_PASSWORD,
+  database: process.env.DB_DATABASE,
+  waitForConnections: true,
+  connectionLimit: 10,
+  queueLimit: 0
 });
 
-// 华为云监控数据库连接池
-export const huaweiPool = createPool({
+// 华为云数据库连接池配置
+export const huaweiPool = mysql.createPool({
   host: process.env.HUAWEI_DB_HOST,
+  port: Number(process.env.HUAWEI_DB_PORT),
   user: process.env.HUAWEI_DB_USER,
   password: process.env.HUAWEI_DB_PASSWORD,
-  port: Number(process.env.HUAWEI_DB_PORT),
-  database: process.env.HUAWEI_DB_DATABASE
+  database: process.env.HUAWEI_DB_DATABASE,
+  waitForConnections: true,
+  connectionLimit: 10,
+  queueLimit: 0
 });
 
-// 腾讯云监控数据库连接池
-export const tencentPool = createPool({
+// 腾讯云数据库连接池配置
+export const tencentPool = mysql.createPool({
   host: process.env.TENCENT_DB_HOST,
+  port: Number(process.env.TENCENT_DB_PORT),
   user: process.env.TENCENT_DB_USER,
   password: process.env.TENCENT_DB_PASSWORD,
-  port: Number(process.env.TENCENT_DB_PORT),
-  database: process.env.TENCENT_DB_DATABASE
+  database: process.env.TENCENT_DB_DATABASE,
+  waitForConnections: true,
+  connectionLimit: 10,
+  queueLimit: 0
 });
 
 // 测试数据库连接

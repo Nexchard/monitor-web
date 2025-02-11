@@ -1,6 +1,6 @@
 import { huaweiPool, tencentPool, unifiedPool } from '../config/db.config';
 import { ValidationService } from './validation.service';
-import { RowDataPacket, OkPacket, ResultSetHeader } from 'mysql2';
+import { RowDataPacket } from 'mysql2';
 
 interface CloudResource extends RowDataPacket {
   cloud_provider: string;
@@ -92,6 +92,20 @@ interface TencentBill extends RowDataPacket {
   batch_number: string;
 }
 
+interface HuaweiStoredCard extends RowDataPacket {
+  id: number;
+  account_name: string;
+  card_id: string;
+  card_name: string;
+  face_value: number;
+  balance: number;
+  effective_time: Date;
+  expire_time: Date;
+  batch_number: string;
+  created_at: Date;
+  updated_at: Date;
+}
+
 // 添加查询参数接口
 interface ExpiryResourcesQuery {
   remainingDays?: number;  // 剩余天数阈值
@@ -105,9 +119,15 @@ export class CloudService {
     this.validationService = new ValidationService();
   }
 
+  // 生成批次号
+  private generateBatchNumber(): string {
+    return new Date().toISOString().replace(/[-:\.]/g, '').slice(0, 14);
+  }
+
   // 同步资源数据到统一数据库
   async syncExpiryResources() {
     try {
+      const batchNumber = this.generateBatchNumber();
       const resources = await this.getExpiryResources();
       
       // 清除旧数据
@@ -145,24 +165,82 @@ export class CloudService {
   // 同步账户余额到统一数据库
   async syncAccountBalances() {
     try {
-      const balances = await this.getAccountBalances();
+      const batchNumber = this.generateBatchNumber();
       
+      // 获取华为云账户余额
+      const [huaweiBalances] = await huaweiPool.query<HuaweiAccount[]>(`
+        SELECT account_name, total_amount as balance, 'CNY' as currency, ? as batch_number
+        FROM account_balances
+      `, [batchNumber]);
+
+      // 获取华为云储值卡信息
+      const [huaweiStoredCards] = await huaweiPool.query<HuaweiStoredCard[]>(`
+        SELECT 
+          account_name,
+          card_id,
+          card_name,
+          face_value,
+          balance,
+          effective_time,
+          expire_time,
+          ? as batch_number
+        FROM stored_cards
+        WHERE status = 'VALID'  -- 只同步有效的储值卡
+      `, [batchNumber]);
+
+      // 获取腾讯云账户余额
+      const [tencentBalances] = await tencentPool.query<TencentAccount[]>(`
+        SELECT account_name, balance, ? as batch_number
+        FROM account_balances
+      `, [batchNumber]);
+
       // 清除旧数据
       await unifiedPool.query('DELETE FROM cloud_accounts');
       
-      // 插入新数据
-      if (balances && balances.length > 0) {
-        const values = balances.map((balance: CloudAccount) => [
-          balance.cloud_provider,
+      // 准备插入数据
+      const values = [
+        // 华为云现金余额
+        ...huaweiBalances.map(balance => [
+          'huawei',
           balance.account_name,
           balance.balance,
-          balance.currency,
-          balance.batch_number
-        ]);
+          'CNY',
+          'cash',
+          null,  // expire_time
+          balance.batch_number,
+          new Date(),  // created_at
+          new Date()   // updated_at
+        ]),
+        // 华为云储值卡
+        ...huaweiStoredCards.map(card => [
+          'huawei',
+          card.account_name,
+          card.balance,
+          'CNY',
+          'stored_card',
+          card.expire_time,
+          card.batch_number,
+          card.effective_time || new Date(),  // created_at 使用生效时间
+          new Date()   // updated_at
+        ]),
+        // 腾讯云余额
+        ...tencentBalances.map(balance => [
+          'tencent',
+          balance.account_name,
+          balance.balance,
+          'CNY',
+          'cash',
+          null,  // expire_time
+          balance.batch_number,
+          new Date(),  // created_at
+          new Date()   // updated_at
+        ])
+      ];
 
+      if (values.length > 0) {
         await unifiedPool.query(`
           INSERT INTO cloud_accounts 
-          (cloud_provider, account_name, balance, currency, batch_number)
+          (cloud_provider, account_name, balance, currency, balance_type, expire_time, batch_number, created_at, updated_at)
           VALUES ?
         `, [values]);
       }
@@ -206,15 +284,19 @@ export class CloudService {
     }
   }
 
-  // 修改获取资源到期信息的方法
+  // 修改获取资源到期信息的方法，加入备注信息
   async getExpiryResources(query: ExpiryResourcesQuery = {}) {
     try {
       const { remainingDays = 65, orderBy = 'asc' } = query;
       
       const [resources] = await unifiedPool.query<RowDataPacket[]>(`
-        SELECT * FROM cloud_resources
-        WHERE remaining_days <= ?
-        ORDER BY remaining_days ${orderBy === 'asc' ? 'ASC' : 'DESC'}
+        SELECT r.*, rr.remark 
+        FROM cloud_resources r
+        LEFT JOIN resource_remarks rr 
+          ON r.cloud_provider = rr.cloud_provider 
+          AND r.resource_id = rr.resource_id
+        WHERE r.remaining_days <= ?
+        ORDER BY r.remaining_days ${orderBy === 'asc' ? 'ASC' : 'DESC'}
       `, [remainingDays]);
 
       return resources;
@@ -248,260 +330,35 @@ export class CloudService {
     }
   }
 
-  private async syncResources(batchNumber: string) {
+  /**
+   * 更新资源备注
+   * @param resourceId 资源ID
+   * @param remark 备注内容
+   */
+  async updateResourceRemark(resourceId: number, remark: string): Promise<void> {
     try {
-      // 修改查询方式
-      const [hwResources] = await huaweiPool.query<HuaweiResource[]>(`
-        SELECT * FROM resources 
-        WHERE batch_number = (SELECT MAX(batch_number) FROM resources)
-      `);
+      // 首先获取资源信息
+      const [resources] = await unifiedPool.query<RowDataPacket[]>(
+        'SELECT cloud_provider, resource_id FROM cloud_resources WHERE id = ?',
+        [resourceId]
+      );
 
-      const [tcResources] = await tencentPool.query<TencentResource[]>(`
-        SELECT 
-          account_name,
-          instance_name,
-          instance_id,
-          project_name,
-          zone,
-          expired_time,
-          differ_days,
-          batch_number
-        FROM cvm_instances 
-        WHERE batch_number = (SELECT MAX(batch_number) FROM cvm_instances)
-        UNION ALL
-        SELECT 
-          account_name,
-          disk_name as instance_name,
-          disk_id as instance_id,
-          project_name,
-          zone,
-          expired_time,
-          differ_days,
-          batch_number
-        FROM cbs_disks 
-        WHERE batch_number = (SELECT MAX(batch_number) FROM cbs_disks)
-      `);
-
-      // 开启事务
-      const connection = await unifiedPool.getConnection();
-      await connection.beginTransaction();
-
-      try {
-        // 清除旧数据
-        await connection.query('DELETE FROM cloud_resources');
-
-        // 插入华为云资源
-        if (hwResources && hwResources.length > 0) {
-          const hwValues = hwResources.map((resource: HuaweiResource) => [
-            'huawei',
-            resource.account_name,
-            resource.resource_type,
-            resource.resource_id,
-            resource.resource_name,
-            resource.project_name,
-            resource.region,
-            resource.region,
-            resource.expire_time,
-            resource.remaining_days,
-            batchNumber
-          ]);
-
-          await connection.query(`
-            INSERT INTO cloud_resources 
-            (cloud_provider, account_name, resource_type, resource_id, resource_name,
-             project_name, region, zone, expire_time, remaining_days, batch_number)
-            VALUES ?
-          `, [hwValues]);
-        }
-
-        // 插入腾讯云资源
-        if (tcResources && tcResources.length > 0) {
-          const tcValues = tcResources.map((resource: TencentResource) => [
-            'tencent',
-            resource.account_name,
-            resource.instance_id ? 'CVM' : 'CBS',
-            resource.instance_id || resource.disk_id,
-            resource.instance_name || resource.disk_name,
-            resource.project_name,
-            resource.zone,
-            resource.zone,
-            resource.expired_time,
-            resource.differ_days,
-            batchNumber
-          ]);
-
-          await connection.query(`
-            INSERT INTO cloud_resources 
-            (cloud_provider, account_name, resource_type, resource_id, resource_name,
-             project_name, region, zone, expire_time, remaining_days, batch_number)
-            VALUES ?
-          `, [tcValues]);
-        }
-
-        await connection.commit();
-      } catch (error) {
-        await connection.rollback();
-        throw error;
-      } finally {
-        connection.release();
+      if (!resources || resources.length === 0) {
+        throw new Error('Resource not found');
       }
+
+      const resource = resources[0];
+
+      // 使用 INSERT ... ON DUPLICATE KEY UPDATE 语法
+      await unifiedPool.execute(
+        `INSERT INTO resource_remarks (cloud_provider, resource_id, remark)
+         VALUES (?, ?, ?)
+         ON DUPLICATE KEY UPDATE remark = ?`,
+        [resource.cloud_provider, resource.resource_id, remark, remark]
+      );
     } catch (error) {
-      console.error('Error syncing resources:', error);
-      throw error;
-    }
-  }
-
-  // 添加账户同步方法
-  private async syncAccounts(batchNumber: string) {
-    try {
-      // 获取华为云账户数据
-      const [hwAccounts] = await huaweiPool.query<HuaweiAccount[]>(`
-        SELECT * FROM account_balances 
-        WHERE batch_number = (SELECT MAX(batch_number) FROM account_balances)
-      `);
-
-      // 获取腾讯云账户数据
-      const [tcAccounts] = await tencentPool.query<TencentAccount[]>(`
-        SELECT * FROM billing_info 
-        WHERE batch_number = (SELECT MAX(batch_number) FROM billing_info)
-      `);
-
-      // 开启事务
-      const connection = await unifiedPool.getConnection();
-      await connection.beginTransaction();
-
-      try {
-        // 清除旧数据
-        await connection.query('DELETE FROM cloud_accounts');
-
-        // 插入华为云账户数据
-        if (hwAccounts && hwAccounts.length > 0) {
-          const hwValues = hwAccounts.map((account: HuaweiAccount) => [
-            'huawei',
-            account.account_name,
-            account.total_amount,
-            account.currency,
-            'cash',
-            null, // expire_time
-            batchNumber
-          ]);
-
-          await connection.query(`
-            INSERT INTO cloud_accounts 
-            (cloud_provider, account_name, balance, currency, balance_type, expire_time, batch_number)
-            VALUES ?
-          `, [hwValues]);
-        }
-
-        // 插入腾讯云账户数据
-        if (tcAccounts && tcAccounts.length > 0) {
-          const tcValues = tcAccounts.map((account: TencentAccount) => [
-            'tencent',
-            account.account_name,
-            account.balance,
-            'CNY',
-            'cash',
-            null, // expire_time
-            batchNumber
-          ]);
-
-          await connection.query(`
-            INSERT INTO cloud_accounts 
-            (cloud_provider, account_name, balance, currency, balance_type, expire_time, batch_number)
-            VALUES ?
-          `, [tcValues]);
-        }
-
-        await connection.commit();
-      } catch (error) {
-        await connection.rollback();
-        throw error;
-      } finally {
-        connection.release();
-      }
-    } catch (error) {
-      console.error('Error syncing accounts:', error);
-      throw error;
-    }
-  }
-
-  // 添加账单同步方法
-  private async syncBills(batchNumber: string) {
-    try {
-      // 获取华为云账单数据
-      const [hwBills] = await huaweiPool.query<HuaweiBill[]>(`
-        SELECT * FROM account_bills 
-        WHERE batch_number = (SELECT MAX(batch_number) FROM account_bills)
-      `);
-
-      // 获取腾讯云账单数据
-      const [tcBills] = await tencentPool.query<TencentBill[]>(`
-        SELECT * FROM billing_info 
-        WHERE batch_number = (SELECT MAX(batch_number) FROM billing_info)
-      `);
-
-      // 开启事务
-      const connection = await unifiedPool.getConnection();
-      await connection.beginTransaction();
-
-      try {
-        // 清除旧数据
-        await connection.query('DELETE FROM cloud_bills');
-
-        // 插入华为云账单数据
-        if (hwBills && hwBills.length > 0) {
-          const hwValues = hwBills.map((bill: HuaweiBill) => [
-            'huawei',
-            bill.account_name,
-            bill.project_name,
-            bill.service_type,
-            bill.amount,
-            bill.currency,
-            'monthly',
-            bill.created_at ? new Date(bill.created_at).toISOString().split('T')[0] : null,
-            batchNumber
-          ]);
-
-          await connection.query(`
-            INSERT INTO cloud_bills 
-            (cloud_provider, account_name, project_name, service_type, amount, 
-             currency, billing_cycle, billing_date, batch_number)
-            VALUES ?
-          `, [hwValues]);
-        }
-
-        // 插入腾讯云账单数据
-        if (tcBills && tcBills.length > 0) {
-          const tcValues = tcBills.map((bill: TencentBill) => [
-            'tencent',
-            bill.account_name,
-            bill.project_name,
-            bill.service_name,
-            bill.real_total_cost,
-            'CNY',
-            'monthly',
-            bill.billing_date ? new Date(bill.billing_date).toISOString().split('T')[0] : null,
-            batchNumber
-          ]);
-
-          await connection.query(`
-            INSERT INTO cloud_bills 
-            (cloud_provider, account_name, project_name, service_type, amount, 
-             currency, billing_cycle, billing_date, batch_number)
-            VALUES ?
-          `, [tcValues]);
-        }
-
-        await connection.commit();
-      } catch (error) {
-        await connection.rollback();
-        throw error;
-      } finally {
-        connection.release();
-      }
-    } catch (error) {
-      console.error('Error syncing bills:', error);
-      throw error;
+      console.error('Error updating resource remark:', error);
+      throw new Error('Failed to update resource remark');
     }
   }
 } 

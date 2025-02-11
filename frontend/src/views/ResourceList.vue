@@ -36,26 +36,43 @@
   
       <el-card class="filter-card">
         <el-form :inline="true" @submit.prevent="handleWarningDaysSubmit" class="filter-form">
-          <el-form-item label="到期提醒时间">
-            <el-input-number 
-              v-model="warningDays" 
-              :min="1" 
-              :max="1000"
-              @keyup.enter="handleWarningDaysSubmit"
-              placeholder="请输入天数"
-              :controls-position="'right'"
-              class="warning-days-input"
-            />
-            <span class="unit-text">天</span>
-          </el-form-item>
-          <el-form-item>
-            <el-button type="primary" @click="handleWarningDaysSubmit">
-              <el-icon><Check /></el-icon>确认
-            </el-button>
-            <el-button @click="handleReset">
-              <el-icon><Refresh /></el-icon>重置
-            </el-button>
-          </el-form-item>
+          <div class="filter-form-content">
+            <div class="filter-form-left">
+              <el-form-item label="到期提醒时间">
+                <el-input-number 
+                  v-model="warningDays" 
+                  :min="1" 
+                  :max="1000"
+                  @keyup.enter="handleWarningDaysSubmit"
+                  placeholder="请输入天数"
+                  :controls-position="'right'"
+                  class="warning-days-input"
+                />
+                <span class="unit-text">天</span>
+              </el-form-item>
+              <el-form-item>
+                <el-button type="primary" @click="handleWarningDaysSubmit">
+                  <el-icon><Check /></el-icon>确认
+                </el-button>
+                <el-button @click="handleReset">
+                  <el-icon><Refresh /></el-icon>重置
+                </el-button>
+              </el-form-item>
+            </div>
+            <div class="filter-form-right">
+              <el-button 
+                type="primary" 
+                :loading="syncing" 
+                @click="handleSync"
+                :disabled="syncing"
+              >
+                <template #icon>
+                  <el-icon><Refresh /></el-icon>
+                </template>
+                {{ syncing ? '同步中...' : '手动同步数据' }}
+              </el-button>
+            </div>
+          </div>
         </el-form>
       </el-card>
   
@@ -162,6 +179,23 @@
               </el-tag>
             </template>
           </el-table-column>
+          <el-table-column prop="remark" label="备注" min-width="200">
+            <template #default="scope">
+              <div class="remark-cell">
+                <el-input
+                  v-if="scope.row.isEditingRemark"
+                  v-model="scope.row.editingRemark"
+                  placeholder="请输入备注"
+                  @blur="handleRemarkBlur(scope.row)"
+                  @keyup.enter="handleRemarkSave(scope.row)"
+                  size="small"
+                />
+                <div v-else class="remark-content" @click="handleRemarkClick(scope.row)">
+                  {{ scope.row.remark }}
+                </div>
+              </div>
+            </template>
+          </el-table-column>
         </el-table>
       </el-card>
   
@@ -214,7 +248,7 @@
           </el-table-column>
           <el-table-column prop="balance" label="账户余额" min-width="120">
             <template #default="scope">
-              <el-tag :type="getBalanceTagType(scope.row.balance)">
+              <el-tag :type="getBalanceTagType(scope.row.balance, scope.row.balance_type)">
                 {{ currencySymbol }}{{ formatMoney(scope.row.balance) }}
               </el-tag>
             </template>
@@ -273,10 +307,10 @@
   </template>
   
   <script setup lang="ts">
-  import { ref, onMounted, computed, onUnmounted } from 'vue'
+  import { ref, onMounted, computed, onUnmounted, nextTick } from 'vue'
   import { Monitor, Check, Refresh, Timer, Money, Wallet, Search } from '@element-plus/icons-vue'
   import { CloudPlatform, ResourceInfo, AccountBalance, BillingDetail } from '../types'
-  import { getExpiryResources, getAccountBalances, getBillingDetails } from '../api'
+  import { getExpiryResources, getAccountBalances, getBillingDetails, updateResourceRemark, syncData } from '../api'
   import dayjs from 'dayjs'
   import PlatformIcon from '../components/PlatformIcon.vue'
   import { ElMessage } from 'element-plus'
@@ -390,21 +424,38 @@
     console.log('计算 systemBalances:', {
       originalData: balanceInfo.value
     })
-    const balances = new Map<string, AccountBalance>()
+    
+    // 对每个账户分别显示现金余额和储值卡
+    const balances: AccountBalance[] = []
+    
+    // 使用 Map 按账户分组
+    const accountMap = new Map<string, AccountBalance[]>()
+    
     balanceInfo.value.forEach(balance => {
       const key = `${balance.cloud_provider}-${balance.account_name}`
-      if (!balances.has(key)) {
-        balances.set(key, {
-          ...balance,
-          balance: typeof balance.balance === 'string' ? parseFloat(balance.balance) : balance.balance
-        })
+      if (!accountMap.has(key)) {
+        accountMap.set(key, [])
       }
+      accountMap.get(key)?.push({
+        ...balance,
+        balance: typeof balance.balance === 'string' ? parseFloat(balance.balance) : balance.balance
+      })
     })
-    return Array.from(balances.values())
+    
+    // 将分组后的数据转换为数组
+    accountMap.forEach((accountBalances) => {
+      // 添加所有余额记录（包括现金余额和储值卡）
+      balances.push(...accountBalances)
+    })
+    
+    return balances
   })
   
   // 添加错误状态
   const error = ref<string>('')
+  
+  // 添加同步状态
+  const syncing = ref(false)
   
   // 获取数据
   const fetchData = async () => {
@@ -484,9 +535,11 @@
   }
   
   // 获取余额标签类型
-  const getBalanceTagType = (balance: string | number | undefined): string => {
+  const getBalanceTagType = (balance: string | number | undefined, type: string | undefined): string => {
     if (balance === undefined || balance === null) return 'info'
     const numBalance = typeof balance === 'string' ? parseFloat(balance) : balance
+    
+    // 储值卡使用不同的阈值
     if (numBalance <= 100) return 'danger'
     if (numBalance <= 500) return 'warning'
     if (numBalance <= 1000) return 'info'
@@ -583,6 +636,57 @@
         return '现金余额'
     }
   }
+  
+  // 处理备注相关的方法
+  const handleRemarkClick = (row: ResourceInfo) => {
+    row.isEditingRemark = true
+    row.editingRemark = row.remark || ''
+    // 使用 nextTick 确保输入框已渲染后再聚焦
+    nextTick(() => {
+      const input = document.querySelector('.remark-cell .el-input__inner') as HTMLInputElement
+      if (input) {
+        input.focus()
+      }
+    })
+  }
+  
+  const handleRemarkBlur = async (row: ResourceInfo) => {
+    if (row.editingRemark !== row.remark) {
+      await handleRemarkSave(row)
+    }
+    row.isEditingRemark = false
+  }
+  
+  const handleRemarkSave = async (row: ResourceInfo) => {
+    try {
+      await updateResourceRemark(row.id, row.editingRemark || '')
+      row.remark = row.editingRemark
+      ElMessage.success('备注已保存')
+    } catch (error) {
+      console.error('保存备注失败:', error)
+      ElMessage.error(error instanceof Error ? error.message : '保存备注失败')
+    } finally {
+      row.isEditingRemark = false
+    }
+  }
+  
+  // 添加同步方法
+  const handleSync = async () => {
+    if (syncing.value) return
+    
+    try {
+      syncing.value = true
+      await syncData()
+      ElMessage.success('数据同步成功')
+      // 重新加载数据
+      await fetchData()
+    } catch (error) {
+      console.error('同步失败:', error)
+      ElMessage.error(error instanceof Error ? error.message : '同步失败')
+    } finally {
+      syncing.value = false
+    }
+  }
   </script>
   
   <style scoped>
@@ -594,15 +698,16 @@
     min-height: 100vh;
   }
   
-  /* 添加页面标题样式 */
+  /* 修改页面标题样式 */
   .page-header {
     margin-bottom: 24px;
     padding: 16px 0;
     border-bottom: 1px solid var(--el-border-color-light);
+    text-align: center;
   }
   
   .title-wrapper {
-    text-align: center;
+    display: inline-block;
   }
   
   .page-title {
@@ -610,8 +715,9 @@
     font-size: 24px;
     font-weight: 600;
     color: var(--el-text-color-primary);
-    display: inline-flex;
+    display: flex;
     align-items: center;
+    justify-content: center;
     gap: 8px;
   }
   
@@ -623,6 +729,7 @@
   .page-subtitle {
     color: var(--el-text-color-secondary);
     font-size: 14px;
+    text-align: center;
   }
   
   /* 美化卡片样式 */
@@ -663,18 +770,58 @@
   }
   
   .filter-form {
+    width: 100%;
+  }
+  
+  .filter-form-content {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    width: 100%;
+  }
+  
+  .filter-form-left {
     display: flex;
     align-items: center;
-    flex-wrap: wrap;
     gap: 16px;
   }
-  .warning-days-input {
-    width: 160px;
+  
+  .filter-form-right {
+    margin-left: auto;
   }
-  .unit-text {
-    margin-left: 8px;
-    color: var(--el-text-color-secondary);
+  
+  /* 移动端适配 */
+  @media screen and (max-width: 768px) {
+    .filter-form-content {
+      flex-direction: column;
+      gap: 16px;
+    }
+    
+    .filter-form-left {
+      flex-direction: column;
+      width: 100%;
+    }
+    
+    .filter-form-right {
+      width: 100%;
+      margin-left: 0;
+    }
+    
+    .filter-form-right .el-button {
+      width: 100%;
+    }
+    
+    .warning-days-input {
+      width: 100%;
+    }
+    
+    .el-form-item {
+      margin-right: 0;
+      margin-bottom: 16px;
+      width: 100%;
+    }
   }
+  
   .card-header {
     display: flex;
     justify-content: space-between;
@@ -698,8 +845,8 @@
       padding: 12px;
     }
     .page-header {
-      margin-bottom: 16px;
-      padding: 12px 0;
+      flex-direction: column;
+      gap: 16px;
     }
     .title-wrapper {
       text-align: center;
@@ -818,6 +965,34 @@
     }
     
     .filter-item {
+      width: 100%;
+    }
+  }
+  
+  .remark-cell {
+    .remark-content {
+      cursor: pointer;
+      min-height: 24px;
+      line-height: 24px;
+      transition: all 0.3s ease;
+      color: var(--el-text-color-primary);
+      
+      &:empty {
+        &:hover::before {
+          content: '点击添加备注';
+          color: #999;
+          font-size: 12px;
+          opacity: 0.45;
+        }
+      }
+      
+      &:hover {
+        color: var(--el-color-primary);
+        opacity: 0.9;
+      }
+    }
+    
+    .el-input {
       width: 100%;
     }
   }
