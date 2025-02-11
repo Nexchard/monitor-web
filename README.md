@@ -60,7 +60,7 @@
 1. 克隆项目
 ```bash
 git clone [项目地址]
-cd monitor-web2
+cd monitor-web
 ```
 
 2. 安装后端依赖

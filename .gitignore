@@ -2,6 +2,9 @@
 node_modules/
 **/node_modules/
 
+# Keep package-lock.json - it's important for consistent installs
+# package-lock.json should be committed to git
+
 # Build outputs
 dist/
 **/dist/
