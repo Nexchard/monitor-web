@@ -233,6 +233,17 @@ export class SyncService {
             (cloud_provider, account_name, resource_type, resource_id, resource_name,
              project_name, region, zone, expire_time, remaining_days, status, batch_number)
             VALUES ?
+            ON DUPLICATE KEY UPDATE
+              account_name = VALUES(account_name),
+              resource_type = VALUES(resource_type),
+              resource_name = VALUES(resource_name),
+              project_name = VALUES(project_name),
+              region = VALUES(region),
+              zone = VALUES(zone),
+              expire_time = VALUES(expire_time),
+              remaining_days = VALUES(remaining_days),
+              status = VALUES(status),
+              batch_number = VALUES(batch_number)
           `, [hwValues]);
         }
 
@@ -258,6 +269,17 @@ export class SyncService {
             (cloud_provider, account_name, resource_type, resource_id, resource_name,
              project_name, region, zone, expire_time, remaining_days, status, batch_number)
             VALUES ?
+            ON DUPLICATE KEY UPDATE
+              account_name = VALUES(account_name),
+              resource_type = VALUES(resource_type),
+              resource_name = VALUES(resource_name),
+              project_name = VALUES(project_name),
+              region = VALUES(region),
+              zone = VALUES(zone),
+              expire_time = VALUES(expire_time),
+              remaining_days = VALUES(remaining_days),
+              status = VALUES(status),
+              batch_number = VALUES(batch_number)
           `, [tcValues]);
         }
 
